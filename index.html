@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script>
+    let wakeLock = null;
+    async function requestWakeLock() {
+        if ('wakeLock' in navigator) {
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+            } catch (err) {}
+        }
+    }
+    document.addEventListener('DOMContentLoaded', requestWakeLock);
+
+    function startBenchmark() {
+        document.getElementById('startButton').style.display = 'none';
+        document.getElementById('warningMessage').style.display = 'none';
+        document.getElementById('gpuCanvas').style.display = 'block';
+        document.getElementById('emergencyStopButton').style.display = 'block';
+    }
+
+    function emergencyStop() {
+        document.getElementById('gpuCanvas').style.display = 'none';
+        document.getElementById('emergencyStopButton').style.display = 'none';
+        document.getElementById('startButton').style.display = 'block';
+    }
+
+    function showExampleScores() {
+        window.location.href = 'https://benchmark.dill.moe/scores';
+    }
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dill's 3D Benchmark</title>
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap');
+
+    html, body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+        background: #0d1117;
+        color: #8b949e;
+        font-family: 'Roboto Mono', monospace;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        position: relative;
+        min-height: 100vh;
+    }
+
+    .container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        width: 90%;
+        max-width: 800px;
+        padding: 40px;
+        background: #161b22;
+        border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        position: relative;
+        margin-top: 20px;
+        margin-bottom: 20px;
+        animation: fadeIn 1s ease-in-out;
+        overflow: hidden;
+    }
+
+    h1, h3 {
+        color: #bb86fc;
+        margin: 10px 0;
+        text-align: center;
+    }
+
+    h5 {
+        color: #6a737d;
+        margin: 5px 0;
+        font-size: 1em;
+    }
+
+    #score, #fps {
+        margin-top: 20px;
+        font-size: 1.5em;
+        color: #bb86fc;
+        font-weight: bold;
+        padding: 10px;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.8);
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        animation: slideIn 0.5s ease-in-out;
+        display: none;
+    }
+
+    #warningMessage {
+        color: #ff0266;
+        font-weight: bold;
+        background: rgba(255, 0, 42, 0.1);
+        border: 2px solid #ff0266;
+        border-radius: 8px;
+        padding: 15px;
+        margin-top: 20px;
+        width: 80%;
+        text-align: center;
+        font-size: 1.1em;
+        animation: slideIn 0.5s ease-in-out;
+    }
+
+    button {
+        padding: 12px 24px;
+        font-size: 1.1em;
+        cursor: pointer;
+        background: #bb86fc;
+        color: #161b22;
+        border: none;
+        border-radius: 8px;
+        transition: background-color 0.3s ease, transform 0.3s ease;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin: 10px;
+    }
+
+    button:hover {
+        background: #e4405f;
+        transform: translateY(-2px);
+    }
+
+    .emergency-stop-button {
+        background: #ff0266;
+        color: #161b22;
+    }
+
+    .emergency-stop-button:hover {
+        background: #ff80ab;
+        transform: translateY(-2px);
+    }
+
+    canvas {
+        display: none;
+        width: 100%;
+        max-width: 600px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        animation: fadeIn 1s ease-in-out;
+    }
+
+    #startButton {
+        margin-bottom: 20px;
+    }
+
+    #exampleScoresButton {
+        margin-top: 20px;
+    }
+
+    #emergencyStopButton {
+        margin-top: 20px;
+        margin-bottom: 20px;
+    }
+
+    #version {
+        margin-top: 40px;
+        font-size: 0.9em;
+        color: #444;
+        animation: fadeIn 1s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes slideIn {
+        from { transform: translateX(-20px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+	
+	.text-center {
+		text-align: center;
+		margin-top: 10px;
+		margin-bottom: 20px;
+	}
+	
+	#gpuCanvas {
+		display: none;
+		width: 100%;
+		max-width: 600px;
+		box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+		animation: fadeIn 1s ease-in-out;
+		margin-top: 20px;
+	}
+    </style>
+</head>
+<body>
+	<div class="container">
+		<h1>Dill's 3D Benchmark</h1>
+		<h3>Benchmark completes when the FPS drops below 5.</h3>
+		<h3>Results are exponential, a device that scores twice as high is many times more powerful, not just double.</h3>
+		
+		<div id="focusWarning" class="text-center">
+			Make sure to keep the tab in focus and/or device screen awake for the duration of the test.
+		</div>
+
+		<div id="warningMessage" style="display: none;">Warning: Make sure the tab is in focus and the screen is awake.</div>
+
+		<canvas id="gpuCanvas" width="600" height="400"></canvas>
+
+		<div id="score" style="display: none;">Score: N/A</div>
+		<div id="fps" style="display: none;">FPS: N/A</div>
+		<button id="emergencyStopButton" class="emergency-stop-button" style="display: none;" onclick="emergencyStop()">Emergency Stop</button>
+
+		<button id="startButton" onclick="startBenchmark()">Start Benchmark</button>
+		<button id="exampleScoresButton" onclick="showExampleScores()">Leaderboard</button>
+
+		<div id="version">Version: 1.0.4</div>
+	</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
+<script>
+    let renderer, shapes = [], lastRenderTime = performance.now();
+    let score = 0, frameCount = 0, fpsSum = 0, warmUpFrames = 20;
+    const shapesPerBatch = 20;
+    const fpsHistory = [];
+    let benchmarkRunning = false;
+
+    async function startBenchmark() {
+        document.getElementById('startButton').style.display = 'none';
+        document.getElementById('emergencyStopButton').style.display = 'block';
+
+        // Make the canvas and score/fps visible
+        document.getElementById('gpuCanvas').style.display = 'block';
+        document.getElementById('score').style.display = 'block';
+        document.getElementById('fps').style.display = 'block';
+
+        document.getElementById('score').innerText = 'Benchmarking...';
+
+        const canvas = document.getElementById('gpuCanvas');
+        
+        try {
+            renderer = new WebGLRenderer();
+            await renderer.init(canvas);
+        } catch (e) {
+            console.log('WebGL not available:', e);
+            document.getElementById('score').innerText = 'WebGL not available';
+            return;
+        }
+
+        shapes = [renderer.createShape()];
+        score = 1;
+        frameCount = 0;
+        fpsSum = 0;
+        fpsHistory.length = 0; // Clear the FPS history
+
+        benchmarkRunning = true;
+        requestAnimationFrame(renderLoop);
+    }
+
+    function emergencyStop() {
+        if (benchmarkRunning) {
+            benchmarkRunning = false;
+            cancelAnimationFrame(requestAnimationFrameID);
+            document.getElementById('score').innerText = 'Benchmark stopped by user';
+            document.getElementById('emergencyStopButton').style.display = 'none';
+            document.getElementById('fps').style.display = 'none';
+            document.getElementById('gpuCanvas').style.display = 'none';
+        }
+    }
+
+    class WebGLRenderer {
+        async init(canvas) {
+            this.gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            if (!this.gl) {
+                throw new Error("WebGL is not supported");
+            }
+
+            this.gl.disable(this.gl.CULL_FACE);
+            this.gl.enable(this.gl.DEPTH_TEST);
+            this.gl.clearColor(0.0, 0.0, 0.0, 1.0);
+
+            await this.createProgram();
+            this.vertexBuffer = this.gl.createBuffer();
+            return true;
+        }
+
+        async createProgram() {
+            const vertexShaderSource = `
+                attribute vec4 aPosition;
+                uniform mat4 uModelViewMatrix;
+                uniform mat4 uProjectionMatrix;
+                uniform vec3 uLightPosition;
+                varying vec3 vPosition;
+                varying vec3 vNormal;
+                varying vec3 vLight;
+                void main() {
+                    vPosition = vec3(uModelViewMatrix * aPosition);
+                    vNormal = normalize(vec3(uModelViewMatrix * vec4(aPosition.x, aPosition.y, aPosition.z, 0.0)));
+                    vLight = normalize(uLightPosition - vPosition);
+                    gl_Position = uProjectionMatrix * uModelViewMatrix * aPosition;
+                }
+            `;
+
+            const fragmentShaderSource = `
+                precision mediump float;
+                varying vec3 vPosition;
+                varying vec3 vNormal;
+                varying vec3 vLight;
+                uniform vec4 uColor;
+                uniform vec3 uLightColor;
+                uniform vec3 uAmbientColor;
+                uniform float uShininess;
+                void main() {
+                    vec3 ambient = uAmbientColor * uColor.rgb;
+                    vec3 diffuse = max(dot(vNormal, vLight), 0.0) * uLightColor * uColor.rgb;
+                    vec3 reflectDir = reflect(-vLight, vNormal);
+                    vec3 viewDir = normalize(-vPosition);
+                    vec3 specular = pow(max(dot(viewDir, reflectDir), 0.0), uShininess) * uLightColor;
+                    gl_FragColor = vec4(ambient + diffuse + specular, uColor.a);
+                }
+            `;
+
+            const vertexShader = this.compileShader(this.gl.VERTEX_SHADER, vertexShaderSource);
+            const fragmentShader = this.compileShader(this.gl.FRAGMENT_SHADER, fragmentShaderSource);
+
+            this.program = this.gl.createProgram();
+            this.gl.attachShader(this.program, vertexShader);
+            this.gl.attachShader(this.program, fragmentShader);
+            this.gl.linkProgram(this.program);
+
+            if (!this.gl.getProgramParameter(this.program, this.gl.LINK_STATUS)) {
+                throw new Error("Unable to initialize the shader program: " + this.gl.getProgramInfoLog(this.program));
+            }
+
+            this.gl.useProgram(this.program);
+
+            this.uniformLocations = {
+                modelViewMatrix: this.gl.getUniformLocation(this.program, "uModelViewMatrix"),
+                projectionMatrix: this.gl.getUniformLocation(this.program, "uProjectionMatrix"),
+                color: this.gl.getUniformLocation(this.program, "uColor"),
+                lightPosition: this.gl.getUniformLocation(this.program, "uLightPosition"),
+                lightColor: this.gl.getUniformLocation(this.program, "uLightColor"),
+                ambientColor: this.gl.getUniformLocation(this.program, "uAmbientColor"),
+                shininess: this.gl.getUniformLocation(this.program, "uShininess")
+            };
+
+            this.attributeLocations = {
+                position: this.gl.getAttribLocation(this.program, "aPosition")
+            };
+        }
+
+        compileShader(type, source) {
+            const shader = this.gl.createShader(type);
+            this.gl.shaderSource(shader, source);
+            this.gl.compileShader(shader);
+
+            if (!this.gl.getShaderParameter(shader, this.gl.COMPILE_STATUS)) {
+                console.error("Error compiling shader:", this.gl.getShaderInfoLog(shader));
+                this.gl.deleteShader(shader);
+                return null;
+            }
+            return shader;
+        }
+
+        createShape() {
+            return {
+                position: [Math.random() * 10 - 5, Math.random() * 6 - 3, -10],
+                color: [Math.random(), Math.random(), Math.random(), 1.0],
+                rotation: 0
+            };
+        }
+
+        render(shapes, deltaTime) {
+            this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
+
+            const viewMatrix = mat4.create();
+            mat4.lookAt(viewMatrix, [0, 0, 20], [0, 0, 0], [0, 1, 0]);
+
+            const buffer = this.createBuffer(shapes);
+            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, buffer);
+            this.gl.vertexAttribPointer(this.attributeLocations.position, 3, this.gl.FLOAT, false, 0, 0);
+            this.gl.enableVertexAttribArray(this.attributeLocations.position);
+
+            const projectionMatrix = mat4.create();
+            mat4.perspective(projectionMatrix, Math.PI / 4, this.gl.canvas.width / this.gl.canvas.height, 0.1, 100.0);
+
+            shapes.forEach(shape => {
+                shape.rotation += deltaTime * 0.001;
+
+                const modelMatrix = mat4.create();
+                mat4.translate(modelMatrix, modelMatrix, shape.position);
+                mat4.rotate(modelMatrix, modelMatrix, shape.rotation, [0, 1, 0]);
+
+                const modelViewMatrix = mat4.create();
+                mat4.multiply(modelViewMatrix, viewMatrix, modelMatrix);
+
+                this.gl.uniformMatrix4fv(this.uniformLocations.modelViewMatrix, false, modelViewMatrix);
+                this.gl.uniformMatrix4fv(this.uniformLocations.projectionMatrix, false, projectionMatrix);
+                this.gl.uniform4fv(this.uniformLocations.color, shape.color);
+                this.gl.uniform3fv(this.uniformLocations.lightPosition, [10.0, 10.0, 10.0]);
+                this.gl.uniform3fv(this.uniformLocations.lightColor, [1.0, 1.0, 1.0]);
+                this.gl.uniform3fv(this.uniformLocations.ambientColor, [0.1, 0.1, 0.1]);
+                this.gl.uniform1f(this.uniformLocations.shininess, 32.0);
+
+                this.gl.drawArrays(this.gl.TRIANGLES, shapes.indexOf(shape) * 36, 36);
+            });
+        }
+
+        createBuffer(shapes) {
+            const vertices = [
+                -1, -1,  1,  1,  1,  1,  -1,  1,  1,
+                -1, -1, -1,  -1,  1, -1,   1,  1, -1,
+                -1,  1,  1,  -1,  1, -1,   1,  1,  1,
+                1,  1, -1,   1, -1, 1,   1, -1, -1,
+                -1, -1,  1,   1, -1,  1,  -1, -1, -1,
+                1, -1, -1,    1,  1, -1,  -1,  1, -1,
+            ];
+
+            const normals = [
+                0, 0, 1,  0, 0, 1,  0, 0, 1,
+                0, 0, -1, 0, 0, -1, 0, 0, -1,
+                0, 1, 0,  0, 1, 0,  0, 1, 0,
+                0, -1, 0, 0, -1, 0, 0, -1, 0,
+                1, 0, 0,  1, 0, 0,  1, 0, 0,
+                -1, 0, 0, -1, 0, 0, -1, 0, 0,
+            ];
+
+            const verticesArray = [];
+            const normalsArray = [];
+            for (const shape of shapes) {
+                const offset = shape.position;
+                for (let j = 0; j < vertices.length; j += 3) {
+                    verticesArray.push(vertices[j] + offset[0]);
+                    verticesArray.push(vertices[j + 1] + offset[1]);
+                    verticesArray.push(vertices[j + 2] + offset[2]);
+                    normalsArray.push(normals[j]);
+                    normalsArray.push(normals[j + 1]);
+                    normalsArray.push(normals[j + 2]);
+                }
+            }
+
+            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vertexBuffer);
+            this.gl.bufferData(this.gl.ARRAY_BUFFER, new Float32Array(verticesArray.concat(normalsArray)), this.gl.DYNAMIC_DRAW);
+            return this.vertexBuffer;
+        }
+    }
+
+    let requestAnimationFrameID;
+
+    function renderLoop(now) {
+        if (!benchmarkRunning) {
+            return;
+        }
+
+        const deltaTime = now - lastRenderTime;
+        lastRenderTime = now;
+
+        frameCount++;
+        const fps = 1000 / deltaTime;
+
+        // Store the current FPS and timestamp
+        fpsHistory.push({ fps, timestamp: now });
+
+        // Remove entries from the history that are older than 1 second
+        while (fpsHistory.length > 0 && now - fpsHistory[0].timestamp > 1000) {
+            fpsHistory.shift();
+        }
+
+        // Calculate the average FPS over the last second
+        if (frameCount > warmUpFrames) {
+            const totalFPS = fpsHistory.reduce((sum, entry) => sum + entry.fps, 0);
+            const avgFPS = totalFPS / fpsHistory.length;
+
+            document.getElementById('fps').innerText = 'FPS: ' + Math.round(avgFPS);
+
+            if (avgFPS < 5) {
+                let finalScore = (shapes.length - 1);
+                let scoreLabel = '';
+
+                // Determine the performance category based on finalScore
+                if (finalScore < 15000) {
+                    scoreLabel = 'Low End';
+                } else if (finalScore >= 15000 && finalScore <= 33999) {
+                    scoreLabel = 'Mid Range';
+                } else if (finalScore >= 34000 && finalScore < 41999) {
+                    scoreLabel = 'High End';
+                } else {
+                    scoreLabel = 'Extreme High End';
+                }
+
+                let scoreText = finalScore % 1 === 0 ? finalScore.toFixed(0) : finalScore.toFixed(2);
+                document.getElementById('score').innerText = 'Final Score: ' + scoreText + ' - ' + scoreLabel;
+                benchmarkRunning = false;
+                document.getElementById('emergencyStopButton').style.display = 'none';
+                document.getElementById('fps').style.display = 'none';
+                return;
+            }
+
+            document.getElementById('score').innerText = 'Score: ' + (shapes.length - 1);
+        }
+
+        renderer.render(shapes, deltaTime);
+
+        for (let i = 0; i < shapesPerBatch; i++) {
+            shapes.push(renderer.createShape());
+        }
+
+        requestAnimationFrameID = requestAnimationFrame(renderLoop);
+    }
+</script>
+</body>
+</html>
